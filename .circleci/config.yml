@@ -11,7 +11,7 @@ jobs:
           name: Start app and test
           command: |
             npm
-            npmrun start & sleep 5
+            npm run start & sleep 5
             curl http://localhost:3000/api/tags
             npm run test
       - run:
