@@ -1,20 +1,84 @@
 version: 2
-
 jobs:
   build:
     docker:
-      - image: circleci/node:8.5.0
-      - image: circleci/mongo:3.4.10
+      - image: 'circleci/node:8.9.4'
+      - image: 'circleci/mongo:3.4.10'
+        environment:
+          - MONGO_HOST: '127.0.0.1:27017'
+          - MONGODB_DB: conduit
+    working_directory: ~/node-express-realworld-example-app
     steps:
       - checkout
-      - run:
-          name: Start app and test
-          command: |
-            npm
-            npm run start & sleep 5
-            curl http://localhost:3000/api/tags
-            npm run test
-      - run:
-          name: Trigger integration tests
-          command: curl -X POST "https://circleci.com/api/v1.1/project/github/anishkny/realworld-e2e-test?circle-token=$CIRCLE_CI_TOKEN"
-
+      - restore_cache:
+          keys:
+            - 'v1-dependencies-{{ checksum "package.json" }}'
+            - v1-dependencies-
+      - run: npm install
+      - save_cache:
+          paths:
+            - node_modules
+          key: 'v1-dependencies-{{ checksum "package.json" }}'
+  test:
+    docker:
+      - image: 'circleci/node:8.9.4'
+      - image: 'circleci/mongo:3.4.10'
+    environment:
+      - MONGO_HOST: '127.0.0.1:27017'
+      - MONGODB_DB: conduit
+    working_directory: ~/node-express-realworld-example-app
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - 'v1-dependencies-{{ checksum "package.json" }}'
+            - v1-dependencies-
+      - run: npm test
+  deploy-develop:
+    docker:
+      - image: 'circleci/node:8.9.4'
+      - image: 'circleci/mongo:3.4.10'
+    working_directory: ~/node-express-realworld-example-app
+    steps:
+      - checkout
+      - command: null
+  deploy-master:
+    docker:
+      - image: 'circleci/node:8.9.4'
+    working_directory: ~/node-express-realworld-example-app
+    steps:
+      - checkout
+      - command: null
+workflows:
+  version: 2
+  build-and-deploy-on-hold:
+    jobs:
+      - build:
+          filters:
+            branches:
+              only:
+                - master
+                - develop
+      - test:
+          requires:
+            - build
+      - hold:
+          type: approval
+          requires:
+            - test
+      - deploy-develop:
+          requires:
+            - test
+            - build
+            - hold
+          filters:
+            branches:
+              only: develop
+      - deploy-master:
+          requires:
+            - build
+            - test
+            - hold
+          filters:
+            branches:
+              only: master
